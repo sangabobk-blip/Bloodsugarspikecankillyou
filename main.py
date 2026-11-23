@@ -1,5 +1,7 @@
 import os
+import re
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import altair as alt
@@ -12,14 +14,13 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 0. 1번 아이디어: Y2K 세기말 밈 & 싸이월드·네오브루탈리즘 스타일
+# 0. Y2K 세기말 밈 & 싸이월드·네오브루탈리즘 스타일
 # ---------------------------------------------------------
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Batang:wght@700&family=Jua&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&display=swap');
 
-    /* 형광 라임-레몬 모눈종이 배경 */
     .stApp {
         background-color: #f4ff5c;
         background-image:
@@ -30,7 +31,6 @@ st.markdown(
         color: #111111;
     }
 
-    /* 궁서/굵은 밈 스타일 제목 + 핫핑크·시안 이중 그림자 */
     h1 {
         font-family: 'Black Han Sans', 'Gungsuh', serif !important;
         color: #ff1e6e !important;
@@ -42,7 +42,6 @@ st.markdown(
         color: #111111 !important;
     }
 
-    /* 굵은 검정 테두리 + 하드 그림자 카드 */
     div[data-testid="stMetric"], div[data-testid="stForm"], div.stTabs [data-baseweb="tab-panel"] {
         background-color: #ffffff !important;
         border: 3px solid #000000 !important;
@@ -51,7 +50,6 @@ st.markdown(
         padding: 14px !important;
     }
 
-    /* 쫀득한 버튼 */
     div.stButton > button {
         background-color: #ff66c4 !important;
         color: #000000 !important;
@@ -67,7 +65,6 @@ st.markdown(
         transform: translate(-2px, -2px);
     }
 
-    /* 전광판 밈 배너 */
     .retro-marquee {
         background: #000000;
         color: #39ff14;
@@ -80,58 +77,6 @@ st.markdown(
         margin-bottom: 12px;
         box-shadow: 4px 4px 0px #ff1e6e;
     }
-
-    /* 캐릭터 스테이지 */
-    .char-stage {
-        background: radial-gradient(circle, #fff0f6 0%, #ffd6e7 100%);
-        border: 4px solid #000000;
-        box-shadow: 7px 7px 0px #000000;
-        border-radius: 16px;
-        padding: 16px;
-        text-align: center;
-        margin-bottom: 14px;
-    }
-    .char-speech {
-        background: #ffffff;
-        border: 2.5px solid #000000;
-        border-radius: 12px;
-        padding: 8px 12px;
-        margin-top: 8px;
-        font-size: 15px;
-        font-weight: bold;
-        box-shadow: 3px 3px 0px #000000;
-    }
-
-    /* SVG 애니메이션 키프레임 */
-    @keyframes floatHappy {
-        0%, 100% { transform: translateY(0px) rotate(0deg); }
-        50% { transform: translateY(-7px) rotate(2deg); }
-    }
-    @keyframes shiverCry {
-        0%, 100% { transform: translateX(0px); }
-        25% { transform: translateX(-4px) rotate(-1.5deg); }
-        75% { transform: translateX(4px) rotate(1.5deg); }
-    }
-    @keyframes tearDrop {
-        0% { transform: translateY(0px); opacity: 1; }
-        100% { transform: translateY(26px); opacity: 0; }
-    }
-    @keyframes koFall {
-        0% { transform: rotate(0deg) translateY(0px); }
-        35% { transform: rotate(-15deg) translateY(-6px); }
-        100% { transform: rotate(84deg) translate(28px, 18px); }
-    }
-    @keyframes soulRise {
-        0% { transform: translateY(10px) scale(0.85); opacity: 0.2; }
-        50% { transform: translateY(-14px) scale(1.05); opacity: 1; }
-        100% { transform: translateY(-32px) scale(0.9); opacity: 0; }
-    }
-
-    .anim-happy { animation: floatHappy 2s ease-in-out infinite; transform-origin: center; }
-    .anim-cry { animation: shiverCry 0.28s linear infinite; transform-origin: center; }
-    .anim-tear { animation: tearDrop 0.9s ease-in infinite; }
-    .anim-ko { animation: koFall 1.1s cubic-bezier(.36,.07,.19,.97) forwards; transform-origin: 100px 145px; }
-    .anim-soul { animation: soulRise 1.8s ease-out infinite; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -197,44 +142,45 @@ CHARACTER_PROFILES = {
 }
 
 
-def render_character_svg(char_key: str, state: str) -> str:
-    """state: 'happy' | 'cry' | 'ko'"""
+def _compact_html(s: str) -> str:
+    """여러 줄 공백/줄바꿈을 정리해 HTML/SVG 파싱 오류와 코드 블록 오인식을 방지합니다."""
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def render_character_stage(char_key: str, state: str, speech_text: str) -> None:
+    """components.html로 캐릭터 SVG 스테이지를 안전하게 렌더링합니다."""
     group_class = {"happy": "anim-happy", "cry": "anim-cry", "ko": "anim-ko"}[state]
 
     if state == "happy":
-        eyes_svg = """
-            <circle cx="82" cy="88" r="5.5" fill="#111"/>
-            <circle cx="84" cy="86" r="2" fill="#fff"/>
-            <circle cx="118" cy="88" r="5.5" fill="#111"/>
-            <circle cx="120" cy="86" r="2" fill="#fff"/>
-            <path d="M 74 80 Q 82 75 90 80" stroke="#111" stroke-width="2.5" fill="none"/>
-            <path d="M 110 80 Q 118 75 126 80" stroke="#111" stroke-width="2.5" fill="none"/>
-        """
-        tears_svg = """
-            <text x="148" y="55" font-size="20">✨</text>
-            <text x="36" y="65" font-size="18">💖</text>
-        """
+        eyes_svg = (
+            '<circle cx="82" cy="88" r="5.5" fill="#111"/>'
+            '<circle cx="84" cy="86" r="2" fill="#fff"/>'
+            '<circle cx="118" cy="88" r="5.5" fill="#111"/>'
+            '<circle cx="120" cy="86" r="2" fill="#fff"/>'
+            '<path d="M 74 80 Q 82 75 90 80" stroke="#111" stroke-width="2.5" fill="none"/>'
+            '<path d="M 110 80 Q 118 75 126 80" stroke="#111" stroke-width="2.5" fill="none"/>'
+        )
+        tears_svg = '<text x="148" y="55" font-size="20">✨</text><text x="36" y="65" font-size="18">💖</text>'
     elif state == "cry":
-        eyes_svg = """
-            <ellipse cx="82" cy="89" rx="6" ry="7" fill="#111"/>
-            <circle cx="80" cy="87" r="2.5" fill="#fff"/>
-            <ellipse cx="118" cy="89" rx="6" ry="7" fill="#111"/>
-            <circle cx="116" cy="87" r="2.5" fill="#fff"/>
-            <path d="M 73 78 L 90 83" stroke="#111" stroke-width="3" stroke-linecap="round"/>
-            <path d="M 127 78 L 110 83" stroke="#111" stroke-width="3" stroke-linecap="round"/>
-        """
-        tears_svg = """
-            <g class="anim-tear">
-                <path d="M 78 96 Q 74 108 78 114 Q 82 108 78 96 Z" fill="#00b4d8"/>
-                <path d="M 122 96 Q 118 108 122 114 Q 126 108 122 96 Z" fill="#00b4d8"/>
-            </g>
-            <text x="145" y="62" font-size="20">💦</text>
-        """
+        eyes_svg = (
+            '<ellipse cx="82" cy="89" rx="6" ry="7" fill="#111"/>'
+            '<circle cx="80" cy="87" r="2.5" fill="#fff"/>'
+            '<ellipse cx="118" cy="89" rx="6" ry="7" fill="#111"/>'
+            '<circle cx="116" cy="87" r="2.5" fill="#fff"/>'
+            '<path d="M 73 78 L 90 83" stroke="#111" stroke-width="3" stroke-linecap="round"/>'
+            '<path d="M 127 78 L 110 83" stroke="#111" stroke-width="3" stroke-linecap="round"/>'
+        )
+        tears_svg = (
+            '<g class="anim-tear">'
+            '<path d="M 78 96 Q 74 108 78 114 Q 82 108 78 96 Z" fill="#00b4d8"/>'
+            '<path d="M 122 96 Q 118 108 122 114 Q 126 108 122 96 Z" fill="#00b4d8"/>'
+            '</g><text x="145" y="62" font-size="20">💦</text>'
+        )
     else:
-        eyes_svg = """
-            <path d="M 76 83 L 88 94 M 88 83 L 76 94" stroke="#d00000" stroke-width="3.5" stroke-linecap="round"/>
-            <path d="M 112 83 L 124 94 M 124 83 L 112 94" stroke="#d00000" stroke-width="3.5" stroke-linecap="round"/>
-        """
+        eyes_svg = (
+            '<path d="M 76 83 L 88 94 M 88 83 L 76 94" stroke="#d00000" stroke-width="3.5" stroke-linecap="round"/>'
+            '<path d="M 112 83 L 124 94 M 124 83 L 112 94" stroke="#d00000" stroke-width="3.5" stroke-linecap="round"/>'
+        )
         tears_svg = ""
 
     if char_key == "rock_girl":
@@ -243,90 +189,153 @@ def render_character_svg(char_key: str, state: str) -> str:
             if state == "happy"
             else '<ellipse cx="100" cy="114" rx="8" ry="6" fill="#111111" stroke="#000" stroke-width="2"/>'
         )
-        body_svg = f"""
-            <path d="M 48 95 C 42 40, 158 40, 152 95 L 160 155 L 40 155 Z" fill="#1a1a2e" stroke="#000" stroke-width="3"/>
-            <path d="M 55 75 C 48 110, 48 135, 52 150" stroke="#9d4edd" stroke-width="6" fill="none" stroke-linecap="round"/>
-            <path d="M 145 75 C 152 110, 152 135, 148 150" stroke="#ff007f" stroke-width="6" fill="none" stroke-linecap="round"/>
-            <path d="M 62 142 L 138 142 L 146 185 L 54 185 Z" fill="#111" stroke="#000" stroke-width="3"/>
-            <rect x="86" y="128" width="28" height="10" rx="3" fill="#000"/>
-            <circle cx="100" cy="133" r="3" fill="#e0e0e0" stroke="#fff" stroke-width="1.5"/>
-            <path d="M 68 72 C 68 52, 132 52, 132 72 L 128 112 C 124 128, 76 128, 72 112 Z" fill="#ffe5d9" stroke="#000" stroke-width="3"/>
-            <path d="M 66 74 L 82 58 L 94 74 L 106 56 L 120 74 L 134 62 L 132 48 L 68 48 Z" fill="#1a1a2e"/>
-            <polygon points="124,52 118,64 125,64 120,76 133,61 126,61" fill="#ffbe0b" stroke="#000" stroke-width="1.5"/>
-            <ellipse cx="82" cy="88" rx="10" ry="7" fill="#6c757d" opacity="0.45"/>
-            <ellipse cx="118" cy="88" rx="10" ry="7" fill="#6c757d" opacity="0.45"/>
-            {eyes_svg}
-            {mouth_svg}
-            <circle cx="112" cy="118" r="2" fill="#e0e0e0" stroke="#000" stroke-width="1"/>
-        """
+        body_svg = (
+            '<path d="M 48 95 C 42 40, 158 40, 152 95 L 160 155 L 40 155 Z" fill="#1a1a2e" stroke="#000" stroke-width="3"/>'
+            '<path d="M 55 75 C 48 110, 48 135, 52 150" stroke="#9d4edd" stroke-width="6" fill="none" stroke-linecap="round"/>'
+            '<path d="M 145 75 C 152 110, 152 135, 148 150" stroke="#ff007f" stroke-width="6" fill="none" stroke-linecap="round"/>'
+            '<path d="M 62 142 L 138 142 L 146 185 L 54 185 Z" fill="#111" stroke="#000" stroke-width="3"/>'
+            '<rect x="86" y="128" width="28" height="10" rx="3" fill="#000"/>'
+            '<circle cx="100" cy="133" r="3" fill="#e0e0e0" stroke="#fff" stroke-width="1.5"/>'
+            '<path d="M 68 72 C 68 52, 132 52, 132 72 L 128 112 C 124 128, 76 128, 72 112 Z" fill="#ffe5d9" stroke="#000" stroke-width="3"/>'
+            '<path d="M 66 74 L 82 58 L 94 74 L 106 56 L 120 74 L 134 62 L 132 48 L 68 48 Z" fill="#1a1a2e"/>'
+            '<polygon points="124,52 118,64 125,64 120,76 133,61 126,61" fill="#ffbe0b" stroke="#000" stroke-width="1.5"/>'
+            '<ellipse cx="82" cy="88" rx="10" ry="7" fill="#6c757d" opacity="0.45"/>'
+            '<ellipse cx="118" cy="88" rx="10" ry="7" fill="#6c757d" opacity="0.45"/>'
+            f'{eyes_svg}{mouth_svg}'
+            '<circle cx="112" cy="118" r="2" fill="#e0e0e0" stroke="#000" stroke-width="1"/>'
+        )
     elif char_key == "spanish_handsome":
         mouth_svg = (
             '<path d="M 88 112 Q 102 120 113 110" stroke="#9e2a2b" stroke-width="3.2" fill="none" stroke-linecap="round"/>'
             if state == "happy"
             else '<path d="M 89 116 Q 100 109 111 116" stroke="#9e2a2b" stroke-width="3" fill="none" stroke-linecap="round"/>'
         )
-        body_svg = f"""
-            <path d="M 58 88 C 52 38, 148 38, 142 88 L 145 125 L 55 125 Z" fill="#1b1b1b" stroke="#000" stroke-width="3"/>
-            <path d="M 58 140 L 142 140 L 150 185 L 50 185 Z" fill="#ffffff" stroke="#000" stroke-width="3"/>
-            <path d="M 58 140 L 85 185 L 50 185 Z" fill="#c1121f" stroke="#000" stroke-width="2.5"/>
-            <circle cx="72" cy="154" r="7" fill="#e63946" stroke="#000" stroke-width="2"/>
-            <path d="M 68 70 C 68 50, 132 50, 132 70 L 128 110 L 108 128 L 92 128 L 72 110 Z" fill="#f4cbb2" stroke="#000" stroke-width="3"/>
-            <path d="M 65 74 C 72 52, 102 52, 114 68 C 122 56, 134 62, 134 74 C 134 44, 65 44, 65 74 Z" fill="#1b1b1b"/>
-            <path d="M 71 78 L 92 80" stroke="#111" stroke-width="4" stroke-linecap="round"/>
-            <path d="M 108 80 L 129 78" stroke="#111" stroke-width="4" stroke-linecap="round"/>
-            <path d="M 100 84 L 97 102 L 103 103" stroke="#c99679" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-            {eyes_svg}
-            {mouth_svg}
-        """
+        body_svg = (
+            '<path d="M 58 88 C 52 38, 148 38, 142 88 L 145 125 L 55 125 Z" fill="#1b1b1b" stroke="#000" stroke-width="3"/>'
+            '<path d="M 58 140 L 142 140 L 150 185 L 50 185 Z" fill="#ffffff" stroke="#000" stroke-width="3"/>'
+            '<path d="M 58 140 L 85 185 L 50 185 Z" fill="#c1121f" stroke="#000" stroke-width="2.5"/>'
+            '<circle cx="72" cy="154" r="7" fill="#e63946" stroke="#000" stroke-width="2"/>'
+            '<path d="M 68 70 C 68 50, 132 50, 132 70 L 128 110 L 108 128 L 92 128 L 72 110 Z" fill="#f4cbb2" stroke="#000" stroke-width="3"/>'
+            '<path d="M 65 74 C 72 52, 102 52, 114 68 C 122 56, 134 62, 134 74 C 134 44, 65 44, 65 74 Z" fill="#1b1b1b"/>'
+            '<path d="M 71 78 L 92 80" stroke="#111" stroke-width="4" stroke-linecap="round"/>'
+            '<path d="M 108 80 L 129 78" stroke="#111" stroke-width="4" stroke-linecap="round"/>'
+            '<path d="M 100 84 L 97 102 L 103 103" stroke="#c99679" stroke-width="2.5" fill="none" stroke-linecap="round"/>'
+            f'{eyes_svg}{mouth_svg}'
+        )
     elif char_key == "pancreas":
         mouth_svg = (
             '<path d="M 88 108 Q 100 120 112 108" stroke="#000" stroke-width="3" fill="none" stroke-linecap="round"/>'
             if state == "happy"
             else '<ellipse cx="100" cy="112" rx="9" ry="7" fill="#ff4d6d" stroke="#000" stroke-width="2.5"/>'
         )
-        body_svg = f"""
-            <path d="M 45 105 C 42 72, 95 62, 135 76 C 162 85, 165 122, 135 132 C 102 142, 48 138, 45 105 Z"
-                  fill="#ffccd5" stroke="#000" stroke-width="3.5"/>
-            <circle cx="72" cy="100" r="6" fill="#ff8fa3" opacity="0.7"/>
-            <circle cx="128" cy="100" r="6" fill="#ff8fa3" opacity="0.7"/>
-            {eyes_svg}
-            {mouth_svg}
-        """
+        body_svg = (
+            '<path d="M 45 105 C 42 72, 95 62, 135 76 C 162 85, 165 122, 135 132 C 102 142, 48 138, 45 105 Z" fill="#ffccd5" stroke="#000" stroke-width="3.5"/>'
+            '<circle cx="72" cy="100" r="6" fill="#ff8fa3" opacity="0.7"/>'
+            '<circle cx="128" cy="100" r="6" fill="#ff8fa3" opacity="0.7"/>'
+            f'{eyes_svg}{mouth_svg}'
+        )
     else:
         mouth_svg = (
             '<path d="M 85 112 Q 100 122 115 112" stroke="#000" stroke-width="3.5" fill="none"/>'
             if state == "happy"
             else '<path d="M 86 116 Q 100 107 114 116" stroke="#000" stroke-width="3.5" fill="none"/>'
         )
-        body_svg = f"""
-            <path d="M 45 142 Q 100 124 155 142 L 165 185 L 35 185 Z" fill="#3a86ff" stroke="#000" stroke-width="3.5"/>
-            <rect x="68" y="56" width="64" height="72" rx="18" fill="#e0a96d" stroke="#000" stroke-width="3.5"/>
-            <rect x="67" y="64" width="66" height="10" fill="#ff006e" stroke="#000" stroke-width="2.5"/>
-            {eyes_svg}
-            {mouth_svg}
-        """
+        body_svg = (
+            '<path d="M 45 142 Q 100 124 155 142 L 165 185 L 35 185 Z" fill="#3a86ff" stroke="#000" stroke-width="3.5"/>'
+            '<rect x="68" y="56" width="64" height="72" rx="18" fill="#e0a96d" stroke="#000" stroke-width="3.5"/>'
+            '<rect x="67" y="64" width="66" height="10" fill="#ff006e" stroke="#000" stroke-width="2.5"/>'
+            f'{eyes_svg}{mouth_svg}'
+        )
 
     soul_svg = ""
     if state == "ko":
-        soul_svg = """
-            <g class="anim-soul">
-                <path d="M 145 75 C 145 55, 175 55, 175 75 L 175 100 L 168 94 L 160 100 L 152 94 L 145 100 Z"
-                      fill="#ffffff" stroke="#000" stroke-width="2.5" opacity="0.9"/>
-                <circle cx="155" cy="73" r="2.5" fill="#000"/>
-                <circle cx="165" cy="73" r="2.5" fill="#000"/>
-                <text x="146" y="48" font-size="14" font-weight="bold" fill="#000">KO...</text>
-            </g>
-        """
+        soul_svg = (
+            '<g class="anim-soul">'
+            '<path d="M 145 75 C 145 55, 175 55, 175 75 L 175 100 L 168 94 L 160 100 L 152 94 L 145 100 Z" fill="#ffffff" stroke="#000" stroke-width="2.5" opacity="0.92"/>'
+            '<circle cx="155" cy="73" r="2.5" fill="#000"/>'
+            '<circle cx="165" cy="73" r="2.5" fill="#000"/>'
+            '<text x="146" y="48" font-size="14" font-weight="bold" fill="#000">KO...</text>'
+            '</g>'
+        )
 
-    return f"""
-    <svg width="210" height="190" viewBox="0 0 210 190" xmlns="http://www.w3.org/2000/svg">
-        <g class="{group_class}">
-            {body_svg}
-            {tears_svg}
-        </g>
-        {soul_svg}
-    </svg>
-    """
+    safe_speech = speech_text.replace("<", "&lt;").replace(">", "&gt;")
+
+    html_doc = _compact_html(f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
+        body {{
+            margin: 0;
+            padding: 6px;
+            background: transparent;
+            font-family: 'Jua', 'Gulim', sans-serif;
+        }}
+        .char-stage {{
+            background: radial-gradient(circle, #fff0f6 0%, #ffd6e7 100%);
+            border: 4px solid #000000;
+            box-shadow: 6px 6px 0px #000000;
+            border-radius: 16px;
+            padding: 12px;
+            text-align: center;
+        }}
+        .char-speech {{
+            background: #ffffff;
+            border: 2.5px solid #000000;
+            border-radius: 12px;
+            padding: 8px 10px;
+            margin-top: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #111111;
+            box-shadow: 3px 3px 0px #000000;
+            line-height: 1.35;
+        }}
+        @keyframes floatHappy {{
+            0%, 100% {{ transform: translateY(0px) rotate(0deg); }}
+            50% {{ transform: translateY(-7px) rotate(2deg); }}
+        }}
+        @keyframes shiverCry {{
+            0%, 100% {{ transform: translateX(0px); }}
+            25% {{ transform: translateX(-4px) rotate(-1.5deg); }}
+            75% {{ transform: translateX(4px) rotate(1.5deg); }}
+        }}
+        @keyframes tearDrop {{
+            0% {{ transform: translateY(0px); opacity: 1; }}
+            100% {{ transform: translateY(26px); opacity: 0; }}
+        }}
+        @keyframes koFall {{
+            0% {{ transform: rotate(0deg) translateY(0px); }}
+            35% {{ transform: rotate(-15deg) translateY(-6px); }}
+            100% {{ transform: rotate(84deg) translate(28px, 18px); }}
+        }}
+        @keyframes soulRise {{
+            0% {{ transform: translateY(10px) scale(0.85); opacity: 0.2; }}
+            50% {{ transform: translateY(-14px) scale(1.05); opacity: 1; }}
+            100% {{ transform: translateY(-32px) scale(0.9); opacity: 0; }}
+        }}
+        .anim-happy {{ animation: floatHappy 2s ease-in-out infinite; transform-origin: 100px 100px; }}
+        .anim-cry {{ animation: shiverCry 0.28s linear infinite; transform-origin: 100px 100px; }}
+        .anim-tear {{ animation: tearDrop 0.9s ease-in infinite; }}
+        .anim-ko {{ animation: koFall 1.1s cubic-bezier(.36,.07,.19,.97) forwards; transform-origin: 100px 145px; }}
+        .anim-soul {{ animation: soulRise 1.8s ease-out infinite; }}
+    </style>
+    </head>
+    <body>
+        <div class="char-stage">
+            <svg width="205" height="185" viewBox="0 0 210 190" xmlns="http://www.w3.org/2000/svg">
+                <g class="{group_class}">{body_svg}{tears_svg}</g>
+                {soul_svg}
+            </svg>
+            <div class="char-speech">“{safe_speech}”</div>
+        </div>
+    </body>
+    </html>
+    """)
+
+    components.html(html_doc, height=300, scrolling=False)
 
 
 # ---------------------------------------------------------
@@ -334,18 +343,21 @@ def render_character_svg(char_key: str, state: str) -> str:
 # ---------------------------------------------------------
 SEQUENCE_OPTIONS = {
     "탄수화물·단 음료부터 먹기 (혈당 급상승)": {
+        "short_label": "탄수화물 먼저",
         "peak_multiplier": 1.15,
         "peak_time": 35,
         "spread": 22,
         "desc": "빈속에 밥·면·빵·달달한 음료가 먼저 들어가면 포도당이 혈관으로 한꺼번에 쏟아져 인슐린이 과로합니다.",
     },
     "보통 식사 (반찬이랑 밥 같이 먹기)": {
+        "short_label": "보통 식사",
         "peak_multiplier": 1.00,
         "peak_time": 45,
         "spread": 28,
         "desc": "일반적인 식사 방식으로, 음식 구성에 따라 무난하거나 다소 높은 혈당 파도를 만듭니다.",
     },
     "거꾸로 식사법 (채소 → 고기/단백질 → 밥/면)": {
+        "short_label": "거꾸로 식사법",
         "peak_multiplier": 0.72,
         "peak_time": 60,
         "spread": 38,
@@ -410,6 +422,7 @@ def simulate_glucose_curve(metrics: dict, sequence_key: str) -> pd.DataFrame:
     rows = []
 
     for label, cfg in SEQUENCE_OPTIONS.items():
+        short_name = cfg["short_label"]
         ratio = cfg["peak_multiplier"] / SEQUENCE_OPTIONS[sequence_key]["peak_multiplier"]
         amp = metrics["delta_glucose"] * ratio
         t_peak = cfg["peak_time"]
@@ -426,7 +439,7 @@ def simulate_glucose_curve(metrics: dict, sequence_key: str) -> pd.DataFrame:
             curve.append(round(val, 1))
 
         for t, g in zip(minutes, curve):
-            rows.append({"경과 시간(분)": t, "예상 혈당(mg/dL)": g, "먹는 순서": label})
+            rows.append({"경과 시간(분)": int(t), "예상 혈당(mg/dL)": float(g), "먹는 순서": short_name})
 
     return pd.DataFrame(rows)
 
@@ -495,7 +508,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 with tab1:
-    col_food, col_char, col_result = st.columns([1.05, 0.95, 1.25], gap="medium")
+    col_food, col_char, col_result = st.columns([1.0, 0.95, 1.3], gap="medium")
 
     with col_food:
         st.subheader("🍽️ 1. 음식 담기")
@@ -556,22 +569,12 @@ with tab1:
             metrics = None
             current_state = "happy"
 
-        svg_code = render_character_svg(char_info["key"], current_state)
         speech_text = (
             "아직 식판이 비어있어! 음식을 담아주면 내 반응을 보여줄게~"
             if not metrics
             else char_info[current_state]
         )
-
-        st.markdown(
-            f"""
-            <div class="char-stage">
-                {svg_code}
-                <div class="char-speech">“{speech_text}”</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        render_character_stage(char_info["key"], current_state, speech_text)
 
     with col_result:
         st.subheader("📈 3. 혈당 출렁임 분석")
@@ -591,17 +594,37 @@ with tab1:
             rec_seq = " → ".join([f"{i['식품명']}" for i in sorted_items])
             st.success(f"🥢 **추천 먹는 순서:** {rec_seq}")
 
+            y_max = max(180.0, float(np.ceil((metrics["peak_glucose"] + 15) / 10.0) * 10.0))
             curve_df = simulate_glucose_curve(metrics, selected_seq)
             chart = (
                 alt.Chart(curve_df)
                 .mark_line(strokeWidth=3.5)
                 .encode(
-                    x=alt.X("경과 시간(분):Q", title="식사 후 시간 (분)"),
-                    y=alt.Y("예상 혈당(mg/dL):Q", scale=alt.Scale(domain=[80, 220]), title="예상 혈당 (mg/dL)"),
-                    color=alt.Color("먹는 순서:N", legend=alt.Legend(orient="bottom", title=None)),
+                    x=alt.X(
+                        "경과 시간(분):Q",
+                        title="식사 후 시간 (분)",
+                        axis=alt.Axis(labelAngle=0, titlePadding=8, labelPadding=6),
+                    ),
+                    y=alt.Y(
+                        "예상 혈당(mg/dL):Q",
+                        scale=alt.Scale(domain=[80, y_max]),
+                        title="예상 혈당 (mg/dL)",
+                        axis=alt.Axis(titlePadding=12, labelPadding=8),
+                    ),
+                    color=alt.Color(
+                        "먹는 순서:N",
+                        legend=alt.Legend(
+                            orient="bottom",
+                            title=None,
+                            labelFontSize=12,
+                            symbolStrokeWidth=3,
+                            columnPadding=14,
+                        ),
+                    ),
                     tooltip=["먹는 순서", "경과 시간(분)", "예상 혈당(mg/dL)"],
                 )
-                .properties(height=270, title="먹는 순서별 식후 3시간 혈당 롤러코스터 비교")
+                .properties(height=280, title="먹는 순서별 식후 3시간 혈당 롤러코스터 비교")
+                .configure_view(strokeWidth=0)
             )
             st.altair_chart(chart, use_container_width=True)
 
