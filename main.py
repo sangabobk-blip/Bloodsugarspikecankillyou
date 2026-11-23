@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,40 +12,32 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 1. 기본 식품 영양 & 혈당지수(GI) 데이터베이스
-#    (100g 기준 영양성분 및 문헌 기반 대표 GI 값)
+# 1. 정제된 공공 식품 DB 로드 (foods_gluco_db.csv)
 # ---------------------------------------------------------
-FOOD_DATA = [
-    # 채소 / 해조류 / 식이섬유 (Fiber)
-    {"식품명": "양배추 샐러드(무가당)", "분류": "채소·식이섬유", "중량(g)": 100, "열량(kcal)": 24, "탄수화물(g)": 5.2, "식이섬유(g)": 2.5, "단백질(g)": 1.3, "지방(g)": 0.1, "GI": 15},
-    {"식품명": "브로콜리(데친 것)", "분류": "채소·식이섬유", "중량(g)": 100, "열량(kcal)": 35, "탄수화물(g)": 7.2, "식이섬유(g)": 3.3, "단백질(g)": 2.4, "지방(g)": 0.4, "GI": 15},
-    {"식품명": "미역국(건더기 위주)", "분류": "채소·식이섬유", "중량(g)": 250, "열량(kcal)": 45, "탄수화물(g)": 4.0, "식이섬유(g)": 2.8, "단백질(g)": 3.2, "지방(g)": 1.5, "GI": 18},
-    {"식품명": "시금치나물", "분류": "채소·식이섬유", "중량(g)": 70, "열량(kcal)": 42, "탄수화물(g)": 3.1, "식이섬유(g)": 2.2, "단백질(g)": 2.5, "지방(g)": 2.1, "GI": 15},
-    {"식품명": "방울토마토", "분류": "채소·식이섬유", "중량(g)": 100, "열량(kcal)": 18, "탄수화물(g)": 3.9, "식이섬유(g)": 1.2, "단백질(g)": 0.9, "지방(g)": 0.2, "GI": 30},
-
-    # 단백질 / 건강한 지방 (Protein & Fat)
-    {"식품명": "닭가슴살 구이", "분류": "단백질·지방", "중량(g)": 100, "열량(kcal)": 165, "탄수화물(g)": 0.0, "식이섬유(g)": 0.0, "단백질(g)": 31.0, "지방(g)": 3.6, "GI": 0},
-    {"식품명": "삶은 달걀 (2개)", "분류": "단백질·지방", "중량(g)": 100, "열량(kcal)": 155, "탄수화물(g)": 1.1, "식이섬유(g)": 0.0, "단백질(g)": 12.6, "지방(g)": 10.6, "GI": 0},
-    {"식품명": "두부 부침", "분류": "단백질·지방", "중량(g)": 100, "열량(kcal)": 145, "탄수화물(g)": 3.5, "식이섬유(g)": 1.4, "단백질(g)": 12.0, "지방(g)": 9.2, "GI": 15},
-    {"식품명": "고등어 구이", "분류": "단백질·지방", "중량(g)": 100, "열량(kcal)": 262, "탄수화물(g)": 0.0, "식이섬유(g)": 0.0, "단백질(g)": 24.0, "지방(g)": 18.0, "GI": 0},
-    {"식품명": "그릭요거트(무가당)", "분류": "단백질·지방", "중량(g)": 100, "열량(kcal)": 95, "탄수화물(g)": 4.0, "식이섬유(g)": 0.0, "단백질(g)": 10.0, "지방(g)": 4.5, "GI": 14},
-    {"식품명": "아몬드 한 줌", "분류": "단백질·지방", "중량(g)": 25, "열량(kcal)": 145, "탄수화물(g)": 5.4, "식이섬유(g)": 3.1, "단백질(g)": 5.3, "지방(g)": 12.5, "GI": 15},
-
-    # 탄수화물 주식 (Carbohydrate)
-    {"식품명": "흰쌀밥 (1공기)", "분류": "탄수화물", "중량(g)": 210, "열량(kcal)": 300, "탄수화물(g)": 65.5, "식이섬유(g)": 0.8, "단백질(g)": 5.2, "지방(g)": 0.6, "GI": 73},
-    {"식품명": "현미잡곡밥 (1공기)", "분류": "탄수화물", "중량(g)": 210, "열량(kcal)": 285, "탄수화물(g)": 60.0, "식이섬유(g)": 3.8, "단백질(g)": 6.5, "지방(g)": 1.8, "GI": 55},
-    {"식품명": "식빵 (2장)", "분류": "탄수화물", "중량(g)": 70, "열량(kcal)": 185, "탄수화물(g)": 34.0, "식이섬유(g)": 1.5, "단백질(g)": 5.8, "지방(g)": 2.6, "GI": 75},
-    {"식품명": "라면 (1봉지)", "분류": "탄수화물", "중량(g)": 120, "열량(kcal)": 500, "탄수화물(g)": 78.0, "식이섬유(g)": 2.4, "단백질(g)": 10.0, "지방(g)": 16.0, "GI": 73},
-    {"식품명": "삶은 고구마 (중 1개)", "분류": "탄수화물", "중량(g)": 150, "열량(kcal)": 195, "탄수화물(g)": 45.0, "식이섬유(g)": 4.5, "단백질(g)": 2.4, "지방(g)": 0.3, "GI": 54},
-    {"식품명": "떡볶이 (1인분)", "분류": "탄수화물", "중량(g)": 200, "열량(kcal)": 380, "탄수화물(g)": 76.0, "식이섬유(g)": 1.8, "단백질(g)": 7.5, "지방(g)": 4.5, "GI": 82},
-
-    # 음료 / 디저트 (Beverage & Sugar)
-    {"식품명": "가당 카페라떼/밀크티", "분류": "음료·당류", "중량(g)": 350, "열량(kcal)": 220, "탄수화물(g)": 32.0, "식이섬유(g)": 0.0, "단백질(g)": 6.0, "지방(g)": 7.0, "GI": 68},
-    {"식품명": "탄산음료 (1캔)", "분류": "음료·당류", "중량(g)": 250, "열량(kcal)": 108, "탄수화물(g)": 27.0, "식이섬유(g)": 0.0, "단백질(g)": 0.0, "지방(g)": 0.0, "GI": 63},
-    {"식품명": "아메리카노/물/무가당 차", "분류": "음료·당류", "중량(g)": 300, "열량(kcal)": 5, "탄수화물(g)": 0.5, "식이섬유(g)": 0.0, "단백질(g)": 0.2, "지방(g)": 0.0, "GI": 0},
+FALLBACK_FOODS = [
+    {"식품명": "흰쌀밥 (1공기)", "분류": "탄수화물", "원본분류": "밥류", "기준량": "100g", "열량(kcal)": 143.0, "탄수화물(g)": 31.2, "식이섬유(g)": 0.4, "당류(g)": 0.0, "단백질(g)": 2.5, "지방(g)": 0.3, "GI": 73},
+    {"식품명": "닭가슴살 구이", "분류": "단백질·지방", "원본분류": "구이류", "기준량": "100g", "열량(kcal)": 165.0, "탄수화물(g)": 0.0, "식이섬유(g)": 0.0, "당류(g)": 0.0, "단백질(g)": 31.0, "지방(g)": 3.6, "GI": 25},
+    {"식품명": "양배추 샐러드", "분류": "채소·식이섬유", "원본분류": "생채·무침류", "기준량": "100g", "열량(kcal)": 24.0, "탄수화물(g)": 5.2, "식이섬유(g)": 2.5, "당류(g)": 2.0, "단백질(g)": 1.3, "지방(g)": 0.1, "GI": 18},
 ]
 
-df_foods = pd.DataFrame(FOOD_DATA)
+
+@st.cache_data
+def load_food_db() -> pd.DataFrame:
+    csv_path = "foods_gluco_db.csv"
+    if os.path.exists(csv_path):
+        df = pd.read_csv(csv_path, encoding="utf-8-sig")
+    else:
+        df = pd.DataFrame(FALLBACK_FOODS)
+
+    for col in ["열량(kcal)", "탄수화물(g)", "식이섬유(g)", "당류(g)", "단백질(g)", "지방(g)", "GI"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+    df["식품명"] = df["식품명"].astype(str)
+    df["분류"] = df["분류"].astype(str)
+    df["기준량"] = df["기준량"].astype(str)
+    return df
+
+
+df_foods = load_food_db()
 
 # ---------------------------------------------------------
 # 2. 생리학 기반 혈당 부하(GL) 및 예측 곡선 모델 함수
@@ -54,25 +47,24 @@ SEQUENCE_OPTIONS = {
         "peak_multiplier": 1.15,
         "peak_time": 35,
         "spread": 22,
-        "desc": "공복 상태에서 정제 탄수화물·액상 당류가 소장에 빠르게 도달하여 포도당 흡수와 인슐린 급분비를 유발합니다."
+        "desc": "공복 상태에서 정제 탄수화물·액상 당류가 소장에 빠르게 도달하여 포도당 흡수와 인슐린 급분비를 유발합니다.",
     },
     "일반적인 혼합 섭취 (반찬과 밥을 함께)": {
         "peak_multiplier": 1.00,
         "peak_time": 45,
         "spread": 28,
-        "desc": "탄수화물과 부식이 섞여 소화되며 표준적인 식후 혈당 상승 곡선을 보입니다."
+        "desc": "탄수화물과 부식이 섞여 소화되며 표준적인 식후 혈당 상승 곡선을 보입니다.",
     },
     "거꾸로 식사법 (채소/식이섬유 → 단백질/지방 → 탄수화물)": {
         "peak_multiplier": 0.72,
         "peak_time": 60,
         "spread": 38,
-        "desc": "식이섬유가 장 점막에 점성 장벽을 형성하고 단백질·지방이 위 배출 속도를 늦춰 혈당 피크를 약 25~30% 완화합니다."
+        "desc": "식이섬유가 장 점막에 점성 장벽을 형성하고 단백질·지방이 위 배출 속도를 늦춰 혈당 피크를 약 25~30% 완화합니다.",
     },
 }
 
 
 def calculate_meal_metrics(selected_items: list[dict], sequence_key: str) -> dict:
-    """선택된 음식 목록과 식사 순서를 바탕으로 영양 합계, 유효 GL, 혈당 피크 예측치를 계산합니다."""
     if not selected_items:
         return {}
 
@@ -82,22 +74,17 @@ def calculate_meal_metrics(selected_items: list[dict], sequence_key: str) -> dic
     total_protein = sum(item["단백질(g)"] * item["인분"] for item in selected_items)
     total_fat = sum(item["지방(g)"] * item["인분"] for item in selected_items)
 
-    # 순탄수화물 = 총 탄수화물 - 식이섬유 (최소 0)
     net_carb = max(0.0, total_carb - total_fiber)
 
-    # 개별 음식의 혈당부하지수(GL) 합산: GL = (GI * 순탄수화물) / 100
     raw_gl = 0.0
     for item in selected_items:
         item_net_carb = max(0.0, (item["탄수화물(g)"] - item["식이섬유(g)"]) * item["인분"])
         raw_gl += (item["GI"] * item_net_carb) / 100.0
 
-    # 동시 섭취된 식이섬유·단백질·지방에 의한 위 배출 지연 완충 계수 (최대 25% 완화)
     buffer_score = min(0.25, (total_fiber * 0.018) + (total_protein * 0.004) + (total_fat * 0.003))
     seq_factor = SEQUENCE_OPTIONS[sequence_key]["peak_multiplier"]
 
     effective_gl = round(raw_gl * (1.0 - buffer_score) * seq_factor, 1)
-
-    # 공복 기준 혈당 90 mg/dL 가정 시 예상 최고 혈당 상승폭(Δmg/dL) 추정
     delta_glucose = round(effective_gl * 2.35, 1)
     peak_glucose = round(90.0 + delta_glucose, 1)
 
@@ -124,20 +111,16 @@ def calculate_meal_metrics(selected_items: list[dict], sequence_key: str) -> dic
 
 
 def simulate_glucose_curve(metrics: dict, sequence_key: str) -> pd.DataFrame:
-    """식후 0~180분 동안의 예상 혈당 변화 곡선 데이터를 생성합니다."""
     minutes = np.arange(0, 185, 5)
     baseline = 90.0
-
-    # 비교를 위해 '탄수화물 먼저 섭취' vs '선택한 순서' vs '거꾸로 식사법' 3가지 곡선 생성
     rows = []
+
     for label, cfg in SEQUENCE_OPTIONS.items():
-        # 선택된 순서 대비 비율 조정
         ratio = cfg["peak_multiplier"] / SEQUENCE_OPTIONS[sequence_key]["peak_multiplier"]
         amp = metrics["delta_glucose"] * ratio
         t_peak = cfg["peak_time"]
         sigma = cfg["spread"]
 
-        # 비대칭 가우시안 형태로 상승 및 인슐린에 의한 하강 모사
         curve = []
         for t in minutes:
             if t == 0:
@@ -155,23 +138,22 @@ def simulate_glucose_curve(metrics: dict, sequence_key: str) -> pd.DataFrame:
 
 
 def generate_coaching_tips(selected_items: list[dict], metrics: dict, sequence_key: str) -> list[str]:
-    """생리학적 근거에 기반한 식사 개선 코칭 메시지를 반환합니다."""
     tips = []
     categories = {item["분류"] for item in selected_items}
 
     if "채소·식이섬유" not in categories:
-        tips.append("🥬 **식이섬유 선섭취 추가**: 현재 식단에 채소·해조류가 없습니다. 식사 전 양배추·브로콜리·미역 등 수용성 식이섬유를 1접시 먼저 먹으면 소장 내 포도당 확산 속도를 늦출 수 있습니다.")
+        tips.append("🥬 **식이섬유 선섭취 추가**: 채소·나물·김치 등 식이섬유 메뉴를 먼저 먹으면 소장 내 포도당 흡수 속도를 늦추는 데 도움이 됩니다.")
     if "단백질·지방" not in categories:
-        tips.append("🥚 **단백질·지방 보완**: 탄수화물 위주 식사는 위 배출이 빨라 혈당 스파이크를 유발합니다. 달걀, 두부, 닭가슴살, 견과류를 곁들여 인크레틴(GLP-1) 분비와 포만감을 높이세요.")
-    if any(item["식품명"] in ["가당 카페라떼/밀크티", "탄산음료 (1캔)"] for item in selected_items):
-        tips.append("🥤 **액상 과당 주의**: 액체 형태의 당류는 소화 과정 없이 소장에서 즉시 흡수됩니다. 물, 탄산수, 무가당 차로 대체하면 유효 GL을 크게 낮출 수 있습니다.")
+        tips.append("🥚 **단백질·지방 보완**: 구이·조림·찜·두부·달걀 등 단백질 반찬을 곁들이면 위 배출 속도와 포만감 유지에 유리합니다.")
+    if "음료·당류" in categories and metrics["effective_gl"] >= 15:
+        tips.append("🥤 **당류 음료 주의**: 당류가 포함된 음료는 혈당을 빠르게 올릴 수 있으므로 무가당 음료나 물로 대체해 보세요.")
     if sequence_key != "거꾸로 식사법 (채소/식이섬유 → 단백질/지방 → 탄수화물)":
-        tips.append("⏱️ **섭취 순서 변경 권장**: 메뉴를 바꾸기 어렵다면 먹는 순서만 **채소 → 단백질/지방 → 탄수화물** 순으로 바꾸어도 예상 혈당 피크를 약 25% 이상 완충할 수 있습니다.")
+        tips.append("⏱️ **섭취 순서 변경 권장**: 채소 → 단백질/지방 → 탄수화물 순으로 먹으면 예상 혈당 피크를 낮출 수 있습니다.")
     if metrics["effective_gl"] >= 20:
-        tips.append("🚶 **식후 15분 가벼운 걷기**: 식사 후 15~30분 사이 가볍게 걸으면 인슐린 비의존적 포도당 수송체(GLUT4)가 활성화되어 골격근이 혈중 포도당을 빠르게 흡수합니다.")
+        tips.append("🚶 **식후 가벼운 움직임**: 식사 후 10~15분 정도 가볍게 걸으면 혈중 포도당 활용에 도움이 됩니다.")
 
     if not tips:
-        tips.append("✅ **균형 잡힌 저혈당 부하 식단**: 식이섬유·단백질 비율과 섭취 순서가 모두 이상적입니다. 현재 구성을 유지해 보세요!")
+        tips.append("✅ **균형 잡힌 구성**: 식이섬유·단백질 조합과 섭취 순서가 비교적 안정적입니다.")
     return tips
 
 
@@ -179,10 +161,7 @@ def generate_coaching_tips(selected_items: list[dict], metrics: dict, sequence_k
 # 3. Session State 초기화
 # ---------------------------------------------------------
 if "meal_cart" not in st.session_state:
-    st.session_state.meal_cart = [
-        {"식품명": "흰쌀밥 (1공기)", "분류": "탄수화물", "중량(g)": 210, "열량(kcal)": 300, "탄수화물(g)": 65.5, "식이섬유(g)": 0.8, "단백질(g)": 5.2, "지방(g)": 0.6, "GI": 73, "인분": 1.0},
-        {"식품명": "닭가슴살 구이", "분류": "단백질·지방", "중량(g)": 100, "열량(kcal)": 165, "탄수화물(g)": 0.0, "식이섬유(g)": 0.0, "단백질(g)": 31.0, "지방(g)": 3.6, "GI": 0, "인분": 1.0},
-    ]
+    st.session_state.meal_cart = []
 
 if "condition_logs" not in st.session_state:
     st.session_state.condition_logs = []
@@ -191,7 +170,7 @@ if "condition_logs" not in st.session_state:
 # 4. UI 구성
 # ---------------------------------------------------------
 st.title("🧬 GLUCO-FLOW : 혈당 스파이크 예측 & 식사 순서 코치")
-st.caption("같은 칼로리라도 '무엇을, 어떤 순서로' 먹느냐에 따라 인체의 혈당·인슐린 반응이 달라집니다.")
+st.caption(f"공공 식품 영양 DB 기반 ({len(df_foods):,}개 음식) · 식사 순서와 영양소 조합에 따른 혈당 변동 시뮬레이션")
 
 tab1, tab2, tab3 = st.tabs([
     "1️⃣ 식단 조합 & 혈당 시뮬레이터",
@@ -204,23 +183,37 @@ with tab1:
 
     with col_left:
         st.subheader("🍽️ 한 끼 식단 구성하기")
-        cat_filter = st.selectbox("식품 분류 선택", ["전체"] + list(df_foods["분류"].unique()))
+        cat_filter = st.selectbox("식품 분류 선택", ["전체"] + sorted(df_foods["분류"].unique().tolist()))
+        search_query = st.text_input("음식명 검색 (예: 비빔밥, 라면, 아메리카노, 두부)")
+
         filtered_df = df_foods if cat_filter == "전체" else df_foods[df_foods["분류"] == cat_filter]
+        if search_query.strip():
+            filtered_df = filtered_df[filtered_df["식품명"].str.contains(search_query.strip(), case=False, na=False)]
 
-        selected_food_name = st.selectbox("음식 선택", filtered_df["식품명"].tolist())
-        portion = st.number_input("섭취량 (인분/기준 단위 배수)", min_value=0.5, max_value=3.0, value=1.0, step=0.5)
+        if filtered_df.empty:
+            st.warning("검색 조건에 맞는 음식이 없습니다. 검색어를 바꿔 보세요.")
+        else:
+            st.caption(f"검색 결과: {len(filtered_df):,}개")
+            selected_food_name = st.selectbox("음식 선택", filtered_df["식품명"].tolist())
+            selected_row = filtered_df[filtered_df["식품명"] == selected_food_name].iloc[0]
+            st.caption(
+                f"기준량: {selected_row['기준량']} | 열량: {selected_row['열량(kcal)']}kcal | "
+                f"탄수화물: {selected_row['탄수화물(g)']}g | 식이섬유: {selected_row['식이섬유(g)']}g | "
+                f"단백질: {selected_row['단백질(g)']}g | 추정 GI: {int(selected_row['GI'])}"
+            )
+            portion = st.number_input("섭취량 (기준량 배수)", min_value=0.5, max_value=5.0, value=1.0, step=0.5)
 
-        btn_c1, btn_c2 = st.columns(2)
-        with btn_c1:
-            if st.button("➕ 식단에 추가", use_container_width=True):
-                row = df_foods[df_foods["식품명"] == selected_food_name].iloc[0].to_dict()
-                row["인분"] = portion
-                st.session_state.meal_cart.append(row)
-                st.rerun()
-        with btn_c2:
-            if st.button("🗑️ 식단 초기화", use_container_width=True):
-                st.session_state.meal_cart = []
-                st.rerun()
+            btn_c1, btn_c2 = st.columns(2)
+            with btn_c1:
+                if st.button("➕ 식단에 추가", use_container_width=True):
+                    item_dict = selected_row.to_dict()
+                    item_dict["인분"] = float(portion)
+                    st.session_state.meal_cart.append(item_dict)
+                    st.rerun()
+            with btn_c2:
+                if st.button("🗑️ 식단 초기화", use_container_width=True):
+                    st.session_state.meal_cart = []
+                    st.rerun()
 
         st.markdown("#### 현재 담긴 한 끼 메뉴")
         if st.session_state.meal_cart:
@@ -229,7 +222,7 @@ with tab1:
             ]
             st.dataframe(cart_df, use_container_width=True, hide_index=True)
         else:
-            st.info("왼쪽에서 음식을 추가해 한 끼 식단을 구성해 보세요.")
+            st.info("왼쪽에서 음식을 검색·선택한 뒤 '식단에 추가'를 눌러보세요.")
 
         st.markdown("#### ⏱️ 식사 순서 선택")
         selected_seq = st.radio(
@@ -242,7 +235,7 @@ with tab1:
     with col_right:
         st.subheader("📈 예상 혈당 반응 & 코칭 결과")
         if not st.session_state.meal_cart:
-            st.warning("분석할 음식이 없습니다. 최소 1개 이상의 음식을 추가해 주세요.")
+            st.warning("분석할 음식이 없습니다. 최소 1개 이상의 음식을 식단에 추가해 주세요.")
         else:
             metrics = calculate_meal_metrics(st.session_state.meal_cart, selected_seq)
 
@@ -252,13 +245,11 @@ with tab1:
             m3.metric("예상 최고 혈당", f"{metrics['peak_glucose']} mg/dL", f"+{metrics['delta_glucose']} mg/dL", delta_color="inverse")
             m4.metric("혈당 위험도", metrics["risk_level"])
 
-            # 권장 식사 순서 자동 정렬 제안
             order_priority = {"채소·식이섬유": 1, "단백질·지방": 2, "탄수화물": 3, "음료·당류": 4}
             sorted_items = sorted(st.session_state.meal_cart, key=lambda x: order_priority.get(x["분류"], 5))
             recommended_order_str = " → ".join([f"{i['식품명']}({i['분류'].split('·')[0]})" for i in sorted_items])
             st.success(f"**권장 섭취 순서 시퀀스:** {recommended_order_str}")
 
-            # Altair 혈당 곡선 비교 차트
             curve_df = simulate_glucose_curve(metrics, selected_seq)
             chart = (
                 alt.Chart(curve_df)
@@ -319,12 +310,10 @@ with tab3:
     st.subheader("🔬 탐구 배경: 왜 식사 순서와 조합이 혈당을 바꿀까?")
     st.markdown("""
     1. **순탄수화물과 혈당부하지수(GL)**
-       - 식품의 혈당지수(GI)는 탄수화물 50g을 섭취했을 때의 상대적 혈당 상승 속도를 의미하며, 실제 섭취량을 반영하기 위해 **혈당부하지수(GL)**를 사용합니다.
-       $$GL = \\frac{GI \\times \\text{순탄수화물(g)}}{100}$$
-       - 이때 식이섬유는 인체 소화 효소로 분해되지 않으므로 총 탄수화물에서 제외하여 순탄수화물($\\text{총 탄수화물} - \\text{식이섬유}$)을 계산합니다.
+       - 실제 섭취량을 반영한 혈당부하지수(GL)는 $GL = \\frac{GI \\times \\text{순탄수화물(g)}}{100}$ 으로 계산합니다.
+       - 식이섬유는 소화 효소로 분해되지 않으므로 총 탄수화물에서 제외하여 순탄수화물($\\text{총 탄수화물} - \\text{식이섬유}$)을 구합니다.
 
     2. **거꾸로 식사법(Meal Sequencing)의 생리학적 기전**
-       - **위 배출 지연(Delayed Gastric Emptying)**: 단백질과 지방은 십이지장에서 **콜레시스토키닌(CCK)**과 **GLP-1** 분비를 촉진해 위에서 소장으로 음식물이 넘어가는 속도를 늦춥니다.
-       - **소장 내 확산 장벽**: 수용성 식이섬유가 수분과 결합해 점성 겔(Gel)을 형성하면, 아밀레이스 등 탄수화물 소화 효소의 접근과 소장 융모에서의 포도당 흡수 속도가 완만해집니다.
-       - **인슐린 스파이크 완화**: 혈중 포도당 농도가 완만하게 상승하면 이자(췌장)의 $\\beta$세포에서 인슐린이 과도하게 급분비되는 현상을 줄여, 이후 발생하는 반응성 저혈당(식곤증·허기)을 예방할 수 있습니다.
+       - **위 배출 지연**: 단백질·지방과 식이섬유가 위에서 소장으로 넘어가는 속도를 늦추고 소화 효소 작용 및 포도당 흡수 속도를 완만하게 만듭니다.
+       - **인슐린 스파이크 완화**: 혈당이 급격히 치솟았다가 떨어지는 변동을 줄여 식후 졸림과 갑작스러운 허기짐을 완화하는 데 도움을 줍니다.
     """)
